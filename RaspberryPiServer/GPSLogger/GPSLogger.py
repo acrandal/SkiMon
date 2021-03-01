@@ -14,40 +14,47 @@ from time import sleep
 
 # ** Create a InfluxDB data point from gps data point **
 def create_gps_point(location, latitude, longitude, speed, course):
-    try:
-        latitude = float(latitude)
-    except ValueError:
-        latitude = 0.0
-
-    try:
-        longitude = float(longitude)
-    except ValueError:
-        longitude = 0.0
-
-    try:
-        speed = float(speed)
-    except ValueError:
-        speed = 0.0
-
-    try:
-        course = float(course)
-    except ValueError:
-        course = -1000.0
-
+    is_valid = False
     point = {
         "measurement": "GPS",
         "tags": {
             "deviceLocation": location,
         },
         "fields": {
-            "latitude": latitude,
-            "longitude": longitude,
-            "speed": speed,
-            "course": course
         }
     }
-    # print(point)
-    return point
+
+    try:
+        latitude = float(latitude)
+        is_valid = True
+    except ValueError:
+        latitude = 0.0
+    point["fields"]["latitude"] = latitude
+
+    try:
+        longitude = float(longitude)
+        is_valid = True
+    except ValueError:
+        longitude = 0.0
+    point["fields"]["longitude"] = longitude
+
+    try:
+        speed = float(speed)
+        point["fields"]["speed"] = speed
+    except ValueError:
+        speed = 0.0
+
+    try:
+        course = float(course)
+        point["fields"]["course"] = course
+    except ValueError:
+        course = -1000.0
+
+   # print(point)
+    if is_valid:
+        return point
+    else:
+        return None
 
 
 if __name__ == "__main__":
