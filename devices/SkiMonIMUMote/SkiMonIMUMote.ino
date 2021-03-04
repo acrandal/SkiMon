@@ -129,7 +129,7 @@ void doIMUSample() {
     imu.gyro_dps.x, imu.gyro_dps.y, imu.gyro_dps.z);
 
   // ** Do Accelerometer
-  snprintf(msg, MSG_BUFFER_SIZE, "{\"type\":\"%s\", \"location\": \"%s\", \"values\": {\"x\": %6f, \"y\": %6f, \"z\": %6f}}",
+  snprintf(msg, MSG_BUFFER_SIZE, "{\"type\":\"%s\", \"location\": \"%s\", \"value\": {\"x\": %6f, \"y\": %6f, \"z\": %6f}}",
     "accel",
     g_configs.get_DeviceLocation(),
     imu.acc_mps2.x,
@@ -140,7 +140,7 @@ void doIMUSample() {
   //Serial.println(msg);  
 
   // ** Do gyro next
-  snprintf(msg, MSG_BUFFER_SIZE, "{\"type\":\"%s\", \"location\": \"%s\", \"values\": {\"x\": %6f, \"y\": %6f, \"z\": %6f}}",
+  snprintf(msg, MSG_BUFFER_SIZE, "{\"type\":\"%s\", \"location\": \"%s\", \"value\": {\"x\": %6f, \"y\": %6f, \"z\": %6f}}",
     "gyro",
     g_configs.get_DeviceLocation(),
     imu.gyro_dps.x,
