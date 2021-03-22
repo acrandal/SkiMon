@@ -9,7 +9,6 @@ Hardware:
 - Anker USB Battery (10k mAh)
 - Custom case for protection and carrying in the backpack
 
-
 Software:
 - gpsd
 - Python3
@@ -17,9 +16,14 @@ Software:
 - Influxdb
 - Mosquitto
   - Python3 paho-mqtt: https://pypi.org/project/paho-mqtt/
-  - Main data channel is called: SkiMon
+  - Main data channel is called: skimon
+
+Raspberry pi 3 console in /boot/config.txt
+- core_freq=250
+- enable_uart=1
 
 Sources of Notes:
+- Successful wireless net setup: https://www.maketecheasier.com/how-to-turn-raspberry-pi-into-wireless-access-point/
 - https://thepi.io/how-to-use-your-raspberry-pi-as-a-wireless-access-point/
 - https://www.raspberrypi.org/documentation/configuration/wireless/access-point-routed.md 
 - https://learn.adafruit.com/diy-esp8266-home-security-with-lua-and-mqtt/configuring-mqtt-on-the-raspberry-pi
@@ -27,6 +31,8 @@ Sources of Notes:
   - sudo python3 -m pip install paho-mqtt
 - https://pimylifeup.com/raspberry-pi-influxdb/ 
 
+Raspberry Pi - GPS PPS access:
+- http://unixwiz.net/techtips/raspberry-pi3-gps-time.html
 
 (Didn't use this in the end)
 - https://how2electronics.com/esp8266-to-esp8266-communication-ad-hoc-networking/
@@ -49,7 +55,14 @@ Setting up the wireless as a router
   - https://raspberrypi.stackexchange.com/questions/74538/how-do-i-configure-dhcpcd-to-call-wpa-supplicant-for-a-specific-interface
 
 
+NeoPixels on the Raspberry Pi:
+- https://learn.adafruit.com/neopixels-on-raspberry-pi/python-usage
+- sudo pip3 install rpi_ws281x adafruit-circuitpython-neopixel
+- sudo python3 -m pip install --force-reinstall adafruit-blinka
+- Wiring set up to GPIO 12
 
+
+- Install git
 
 
 @copyright 2021
