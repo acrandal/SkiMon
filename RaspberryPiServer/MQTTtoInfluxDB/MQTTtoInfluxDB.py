@@ -27,7 +27,7 @@ def upload_point(measurement, tag_location, field_value):
             "value": field_value
         }
     }
-    print(point)
+    # print(point)
     influx_client.write_points([point])
 
 
@@ -44,7 +44,7 @@ def create_gyro_point(msg):
             "z": msg["value"]["z"]
         }
     }
-    print(point)
+    # print(point)
     return point
 
 
@@ -73,7 +73,7 @@ def on_message(client, userdata, message):
     try:
         msg = json.loads(msg_json)
     except Exception:
-        print("Count not parse message")
+        print("Could not parse message")
         return
     #print(msg)
     #upload_point(msg["type"], msg["location"], msg["value"])
@@ -106,7 +106,7 @@ if __name__ == "__main__":
 
     mqtt_client = mqtt.Client("pyLogger")
     mqtt_client.connect("localhost")
-    mqtt_client.subscribe("SkiMon")
+    mqtt_client.subscribe("skimon")
     mqtt_client.on_message=on_message
     mqtt_client.loop_start()
     print("Connected to MQTT")
