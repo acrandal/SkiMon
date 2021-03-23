@@ -31,7 +31,7 @@ char msg[MSG_BUFFER_SIZE];
 
 //#define SAMPLE_INTERVAL_MILLIS 60000  // 60k millis = 1 minute
 #define SAMPLE_INTERVAL_MILLIS 500  // 1/2 second
-#define MQTT_TOPIC "SkiMon"
+#define MQTT_TOPIC "skimon"
 unsigned long lastMsgMillis = 0 - SAMPLE_INTERVAL_MILLIS;
 
 
@@ -74,6 +74,7 @@ void init_hardware() {
 // ** Setup, initialize, and connect to the wifi network ********************************
 void wifi_connect(char* ssid, char* password) {
   Serial.print("# Initializing Wifi -> ");
+  WiFi.mode(WIFI_STA);                        // Required for wireless to wireless MQTT (for some reason).
   WiFi.begin(ssid, password);
 
   int i = 0;
@@ -95,8 +96,12 @@ void reconnect() {
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
 
-    String clientId = "ESP8266Client-";                   // Create a random client ID
+    String clientId =  String(g_configs.get_DeviceLocation());
+    //String clientId = "ESP8266Client-";                   // Create a random client ID
+    clientId += "-";
     clientId += String(random(0xffff), HEX);
+    Serial.print("MQTT Client ID: ");
+    Serial.println(clientId);
     
     if (client.connect(clientId.c_str())) {               // Attempt to connect
       Serial.println("MQTT client connected.");
@@ -151,6 +156,7 @@ void doIMUSample() {
   //Serial.println(msg);  
 }
 
+
 // ** One off setup at boot **************************************************************
 void setup() {
   init_hardware();
@@ -183,4 +189,6 @@ void loop() {
 
     doIMUSample();
   }
+  
+  delay(10);
 }
