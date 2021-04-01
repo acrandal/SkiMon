@@ -12,10 +12,12 @@ import paho.mqtt.client as mqtt
 from influxdb import InfluxDBClient
 from time import sleep
 import json
+import logging
 
 global influx_client
 global message_count
 message_count = 0;
+
 
 def upload_point(measurement, tag_location, field_value):
     point = {
@@ -66,8 +68,6 @@ def create_accel_point(msg):
 
 def on_message(client, userdata, message):
     global message_count
-    #print("message received " ,str(message.payload.decode("utf-8")))
-    #print("message topic=",message.topic)
     msg_json = str(message.payload.decode("utf-8"))
 
     try:
@@ -80,9 +80,9 @@ def on_message(client, userdata, message):
 
     message_count += 1
     if( message_count % 100 == 0 ):
-        print(".", end = "")
+        print(".", end = "", flush=True)
     if( message_count % 10000 == 0 ):
-        print()
+        print("", flush=True)
         message_count = 0
 
 
@@ -95,29 +95,39 @@ def on_message(client, userdata, message):
     if(newPoint):
         influx_client.write_points([newPoint])
 
+def on_connect(client, userdata, flags, rc):
+    logging.info("Connected with result code "+str(rc))
+
+    # Subscribing in on_connect() means that if we lose the connection and
+    # reconnect then subscriptions will be renewed.
+    client.subscribe("skimon")
 
 if __name__ == "__main__":
-    print("Starting logger.")
+    formatter = "[%(asctime)s] %(name)s {%(filename)s:%(lineno)d} %(levelname)s - %(message)s"
+    logging.basicConfig(level=logging.INFO, format=formatter)
+    logging.info("Starting logger.")
 
     influx_client = InfluxDBClient(host='localhost', port=8086, database='skimon')
-    print("Connected to Influx")
+    logging.info("Connected to InfluxDB")
 
     # client.write_points(points)
 
     mqtt_client = mqtt.Client("pyLogger")
+    mqtt_client.on_connect = on_connect
+    mqtt_client.on_message = on_message
+    mqtt_client.enable_logger()
+
     mqtt_client.connect("localhost")
-    mqtt_client.subscribe("skimon")
-    mqtt_client.on_message=on_message
-    mqtt_client.loop_start()
-    print("Connected to MQTT")
 
     try:
-        while(True):
-            sleep(4)
+        mqtt_client.loop_forever()
+        logging.info("Connected to MQTT - starting processing")
     except KeyboardInterrupt:
-        print("Received interrupt - quitting")
-
-    mqtt_client.loop_stop()
-    mqtt_client.disconnect()
-
-    print("Logger terminating.")
+        print("")
+        logging.info("Received interrupt - quitting")
+    finally:
+        mqtt_client.loop_stop()
+        mqtt_client.disconnect()
+        influx_client.close()
+        logging.info("Disconnected from MQTT & InfluxDB")
+    logging.info("Logger terminated.")
