@@ -1,15 +1,15 @@
 /**
- *  Internet of Things style Temperature and Humidity sensor
+ *  SkiMon Project Inertial Measurement Unit Mote (IMU Mote)
  *
  *  Uses ESP8266 microcontroller - with wifi
  *    Device: LOLIN D1 Mini (Wemos clone)
- *  Sensor: SHT30 LOLIN board for temperature and humidity
+ *  Sensor: Pololu Altimu10-v5
  *
  *  Reads sensor and uploads values to MQTT for processing
  *  Uses Crandall's EEPROM Menu system for storing configurations
  * 
- *  @author Aaron S. Crandall <acrandal@gmail.com>, 2020
- *  @copyright 2020
+ *  @author Aaron S. Crandall <crandall@gonzaga.edu>
+ *  @copyright 2021
  */
 
 #include <Wire.h>
@@ -30,7 +30,7 @@ LSM6 imu;
 char msg[MSG_BUFFER_SIZE];
 
 //#define SAMPLE_INTERVAL_MILLIS 60000  // 60k millis = 1 minute
-#define SAMPLE_INTERVAL_MILLIS 500  // 1/2 second
+#define SAMPLE_INTERVAL_MILLIS 50  // 1/20 second (20 Hz)
 #define MQTT_TOPIC "skimon"
 unsigned long lastMsgMillis = 0 - SAMPLE_INTERVAL_MILLIS;
 
