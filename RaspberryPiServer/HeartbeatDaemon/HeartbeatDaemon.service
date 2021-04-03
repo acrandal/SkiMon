@@ -1,0 +1,16 @@
+[Unit]
+Description=Heartbeat Daemon
+After=network.target
+Requires=influxdb.service
+Requires=mosquitto.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=crandall
+ExecStart=/usr/local/skimon/bin/HeartbeatDaemon.py
+
+[Install]
+WantedBy=multi-user.target

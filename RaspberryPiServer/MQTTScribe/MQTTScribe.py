@@ -65,7 +65,33 @@ def create_accel_point(msg):
     }
     return point
 
+# ** Create a InfluxDB data point from a status message **
+def create_status_point(msg):
+    point = {
+        "measurement": "status",
+        "tags": {
+            "deviceLocation": msg["location"],
+        },
+        "fields": {
+            "online": msg["value"]
+        }
+    }
+    return point
 
+# ** Create a InfluxDB data point from a recording message **
+def create_recording_point(msg):
+    point = {
+        "measurement": "recording",
+        "tags": {
+            "deviceLocation": msg["location"],
+        },
+        "fields": {
+            "status": msg["value"]
+        }
+    }
+    return point
+
+# ** ********************************************************
 def on_message(client, userdata, message):
     global message_count
     msg_json = str(message.payload.decode("utf-8"))
@@ -75,8 +101,6 @@ def on_message(client, userdata, message):
     except Exception:
         print("Could not parse message")
         return
-    #print(msg)
-    #upload_point(msg["type"], msg["location"], msg["value"])
 
     message_count += 1
     if( message_count % 100 == 0 ):
@@ -85,12 +109,15 @@ def on_message(client, userdata, message):
         print("", flush=True)
         message_count = 0
 
-
     newPoint = None
     if(msg["type"] == 'accel'):
         newPoint = create_accel_point(msg)
     elif(msg["type"] == 'gyro'):
         newPoint = create_gyro_point(msg)
+    elif(msg["type"] == 'status'):
+        newPoint = create_status_point(msg)
+    elif(msg["type"] == 'recording'):
+        newPoint = create_recording_point(msg)
 
     if(newPoint):
         influx_client.write_points([newPoint])
