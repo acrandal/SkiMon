@@ -1,0 +1,16 @@
+[Unit]
+Description=SkiMon Status Daemon
+After=network.target
+Requires=influxdb.service
+Requires=mosquitto.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=root
+ExecStart=/usr/local/skimon/bin/StatusDaemon.py
+
+[Install]
+WantedBy=multi-user.target

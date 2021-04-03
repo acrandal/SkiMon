@@ -138,14 +138,13 @@ def on_connect(client, userdata, flags, rc):
 def updateLEDs(currStats):
     global pixels
 
-    recordingPixel = 0
     red = (255, 0, 0)
     green = (0, 255, 0)
     blue = (0,0,255)
     if( currStats["recording"] == "start" ):
-        pixels[recordingPixel] = green
+        pixels[pixelIDs["recording"]] = green
     else:
-        pixels[recordingPixel] = red
+        pixels[pixelIDs["recording"]] = red
 
     for moteName in currStats["motes"]:
         maxTimeout = 10
