@@ -141,6 +141,7 @@ def updateLEDs(currStats):
     red = (255, 0, 0)
     green = (0, 255, 0)
     blue = (0,0,255)
+    amber = (255,255,0)
     if( currStats["recording"] == "start" ):
         pixels[pixelIDs["recording"]] = green
     else:
@@ -152,7 +153,10 @@ def updateLEDs(currStats):
         moteTimeout = min(moteTimeout, maxTimeout)
         moteTimeout = maxTimeout - moteTimeout
         moteColorPct = float(moteTimeout) / maxTimeout
-        moteColor = tuple(int(i * moteColorPct) for i in blue)
+        currColor = blue
+        if moteName[0] == 'R':
+            currColor = amber
+        moteColor = tuple(int(i * moteColorPct) for i in currColor)
         pixels[pixelIDs[moteName]] = moteColor
     pixels.show()
 
