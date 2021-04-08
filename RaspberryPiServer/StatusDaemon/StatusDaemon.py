@@ -13,6 +13,8 @@ from time import sleep, time
 import json
 import logging
 import threading
+import os
+import subprocess
 
 import board
 import neopixel
@@ -83,6 +85,16 @@ pixelIDs = {
     "RightBack": 3
 }
 
+# ** ********************************************************
+def getDiskFullPct():
+    pct = 0
+    cmd = "df -h /var/lib/influxdb | grep influx | awk '{print $5}'"
+    res = subprocess.check_output(cmd, shell=True)
+    res = str(res, 'utf-8')
+    res = res[:-2]
+    pct = int(res)
+    return pct
+
 
 # ** ********************************************************
 def on_message(client, userdata, message):
@@ -122,6 +134,8 @@ def on_message(client, userdata, message):
         }
         for moteName in stats["motes"]:
             sendMsg["motes"][moteName] = (int)(time() - stats["motes"][moteName])
+
+        sendMsg["diskFull"] = getDiskFullPct()
 
         sendMsg_json = json.dumps(sendMsg)
 
