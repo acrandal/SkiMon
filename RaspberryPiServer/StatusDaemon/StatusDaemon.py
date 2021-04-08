@@ -31,7 +31,7 @@ global threadLock
 threadLock = threading.Lock()
 
 global maxAge
-maxAge = 10
+maxAge = 10 
 
 global lastSentEpoch
 lastSentEpoch = time()
@@ -148,7 +148,7 @@ def updateLEDs(currStats):
         pixels[pixelIDs["recording"]] = red
 
     for moteName in currStats["motes"]:
-        maxTimeout = 10
+        maxTimeout = 3
         moteTimeout = (int)(time() - currStats["motes"][moteName])
         moteTimeout = min(moteTimeout, maxTimeout)
         moteTimeout = maxTimeout - moteTimeout
