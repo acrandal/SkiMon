@@ -35,6 +35,9 @@ done = False
 global msgQueue
 msgQueue = queue.Queue()
 
+global debug
+debug = False
+
 
 # ** ********************************************************
 def writerThreadMain():
@@ -42,6 +45,7 @@ def writerThreadMain():
     global msgQueue
     global log_file
     global message_count
+    global debug
 
     while not done:
         try:
@@ -54,13 +58,14 @@ def writerThreadMain():
         log_file.write(msg + "\n")
 
         message_count += 1
-        if( message_count % 100 == 0 ):
+        if( debug and message_count % 100 == 0 ):
             print(".", end = "", flush=True)
-        if( message_count % 10000 == 0 ):
+        if( debug and message_count % 10000 == 0 ):
             print("", flush=True)
             message_count = 0
 
-        print(msgQueue.qsize())
+        if( msgQueue.qsize() > 100 ):
+            logging.debug("Queue buffering up: " + str(msgQueue.qsize()))
 
     logging.info("Thread ending")
 
@@ -96,15 +101,8 @@ def on_connect(client, userdata, flags, rc):
 
 if __name__ == "__main__":
     formatter = "[%(asctime)s] %(name)s {%(filename)s:%(lineno)d} %(levelname)s - %(message)s"
-    logging.basicConfig(level=logging.INFO, format=formatter)
+    logging.basicConfig(level=logging.DEBUG, format=formatter)
     logging.info("Starting MQTT File Scribe.")
-
-    #logger = logging.getLogger('skimon')
-    #logger.setLevel(logging.INFO)
-
-    #logHandler = handlers.TimedRotatingFileHandler(file_path + "/" + 'skimon.log', when='M', interval=15)
-    #logHandler.setLevel(logging.INFO)
-    #logger.addHandler(logHandler)
 
     # move all old log files to the main SD card for archiving
     backups_dir = "/usr/local/skimon/logs"
@@ -113,6 +111,7 @@ if __name__ == "__main__":
     logging.info("Moving old logs to main SD card for archiving")
     os.system('mkdir -p ' + backups_dir)
     os.system('mv -f ' + file_path + "/* " + backups_dir + "/")
+    os.system('rm -f ' + file_path + "/current")
 
     # create new log file for this run
     now = datetime.now()
@@ -121,6 +120,7 @@ if __name__ == "__main__":
     logging.info("Creating new log file for this run: " + log_file_name)
     try:
         log_file = open(file_path + "/" + log_file_name, 'w')
+        os.system('ln -s \'' + file_path + "/" + log_file_name + "\' " + file_path + "/current")
     except Exception as e:
         logging.error("Problem opening log file: " + str(e))
 
@@ -134,7 +134,7 @@ if __name__ == "__main__":
     mqtt_client = mqtt.Client("FileScribe")
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = on_message
-    mqtt_client.enable_logger()
+    # mqtt_client.enable_logger()
 
     mqtt_client.connect("localhost")
 
