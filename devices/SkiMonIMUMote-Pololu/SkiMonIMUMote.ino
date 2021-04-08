@@ -15,8 +15,7 @@
 #include <Wire.h>
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>           // MQTT client
-//#include <LSM6.h>                 // LSM6 driver from Pololu
-#include <Adafruit_LSM6DS33.h>      // LSM6 driver from Adafruit
+#include <LSM6.h>
 
 #include "eepromMenu.h"
 
@@ -25,7 +24,7 @@ ESP8266_EEPROM_Configs g_configs;   // From eepromMenu.h
 WiFiClient espClient;
 PubSubClient client(espClient);     // MQTT client
 
-//LSM6 imu;
+LSM6 imu;
 
 #define MSG_BUFFER_SIZE  (200)
 char msg[MSG_BUFFER_SIZE];
@@ -36,32 +35,15 @@ char msg[MSG_BUFFER_SIZE];
 unsigned long lastMsgMillis = 0 - SAMPLE_INTERVAL_MILLIS;
 
 
-unsigned long startClockMillis;
-int clockSamplesCount;
-unsigned long lastSampleMillis;
-unsigned long endSampleMillis;
-int loopMicroseconds;
-#define SAMPLE_FREQUENCY 50
-
-Adafruit_LSM6DS33 lsm6ds33;
-
-
-
-
 bool g_light_on = false;
 
 // ** Flip the LED state ******************************************
-void turn_light_on() { digitalWrite(BUILTIN_LED, LOW); }
-void turn_light_off() { digitalWrite(BUILTIN_LED, HIGH); }
-
 void toggle_light() {
   if( g_light_on ) {
-//    digitalWrite(BUILTIN_LED, HIGH);
-    turn_light_off();
+    digitalWrite(BUILTIN_LED, HIGH);
     g_light_on = false;
   } else {
-//    digitalWrite(BUILTIN_LED, LOW);
-    turn_light_on();
+    digitalWrite(BUILTIN_LED, LOW);
     g_light_on = true;
   }
 }
@@ -75,31 +57,15 @@ void init_hardware() {
   while(!Serial) { delay(100); }
   delay(1000);                      // Give serial time to settle
 
-//  // ** Initialize the LSM6 IMU sensor **
-//  if (!imu.init())
-//  {
-//    Serial.println("Failed to detect and initialize IMU!");
-//    while (1);
-//  }
-//  imu.enableDefault();
-//  imu.setAccScale(ACC4g);
-
   // ** Initialize the LSM6 IMU sensor **
-  if (!lsm6ds33.begin_I2C(0x6B)) {
-    Serial.println("Failed to find LSM6DS33 chip");
-    while (1) {
-      delay(10);
-    }
+  if (!imu.init())
+  {
+    Serial.println("Failed to detect and initialize IMU!");
+    while (1);
   }
-  Serial.println("LSM6DS33 Found!");
+  imu.enableDefault();
+  imu.setAccScale(ACC4g);
 
-  lsm6ds33.setAccelRange(LSM6DS_ACCEL_RANGE_8_G);
-  // lsm6ds33.setGyroRange(LSM6DS_GYRO_RANGE_250_DPS);
-  lsm6ds33.setAccelDataRate(LSM6DS_RATE_208_HZ);
-  lsm6ds33.setGyroDataRate(LSM6DS_RATE_208_HZ);
-
-  lsm6ds33.configInt1(false, false, true); // accelerometer DRDY on INT1
-  lsm6ds33.configInt2(false, true, false); // gyro DRDY on INT2
 
   Serial.println("\nHardware initialized.");
 }
@@ -161,26 +127,19 @@ void reconnect() {
 
 // ** Read IMU for accel & gyro values - publish to MQTT *****************************
 void doIMUSample() {
-  sensors_event_t accel;
-  sensors_event_t gyro;
-  sensors_event_t temp;
-  lsm6ds33.getEvent(&accel, &gyro, &temp);
-
-  //Serial.print(temp.temperature);
-  //Serial.print(",");
+  imu.readCalc();
   
   snprintf(msg, MSG_BUFFER_SIZE, "A: %6f %6f %6f    G: %6f %6f %6f",
-    accel.acceleration.x, accel.acceleration.y, accel.acceleration.z,
-    gyro.gyro.x, gyro.gyro.y, gyro.gyro.z);
-  //Serial.println(msg);
+    imu.acc_mps2.x, imu.acc_mps2.y, imu.acc_mps2.z,
+    imu.gyro_dps.x, imu.gyro_dps.y, imu.gyro_dps.z);
 
   // ** Do Accelerometer
   snprintf(msg, MSG_BUFFER_SIZE, "{\"type\":\"%s\", \"location\": \"%s\", \"value\": {\"x\": %6f, \"y\": %6f, \"z\": %6f}}",
     "accel",
     g_configs.get_DeviceLocation(),
-    accel.acceleration.x,
-    accel.acceleration.y,
-    accel.acceleration.z
+    imu.acc_mps2.x,
+    imu.acc_mps2.y,
+    imu.acc_mps2.z
   );
   client.publish(MQTT_TOPIC, msg);
   //Serial.println(msg);  
@@ -189,9 +148,9 @@ void doIMUSample() {
   snprintf(msg, MSG_BUFFER_SIZE, "{\"type\":\"%s\", \"location\": \"%s\", \"value\": {\"x\": %6f, \"y\": %6f, \"z\": %6f}}",
     "gyro",
     g_configs.get_DeviceLocation(),
-    gyro.gyro.x,
-    gyro.gyro.y,
-    gyro.gyro.z
+    imu.gyro_dps.x,
+    imu.gyro_dps.y,
+    imu.gyro_dps.z
   );  
   client.publish(MQTT_TOPIC, msg);
   //Serial.println(msg);  
@@ -201,14 +160,6 @@ void doIMUSample() {
 // ** One off setup at boot **************************************************************
 void setup() {
   init_hardware();
-
-  // Sampling rate values and configs
-  clockSamplesCount = 0;
-  startClockMillis = millis();
-  endSampleMillis = millis();
-
-  loopMicroseconds = 1000000 / SAMPLE_FREQUENCY;
-
 
   g_configs.init();           // Read configs from EEPROM - provide serial menu to edit
   wifi_connect(g_configs.get_SSID(), g_configs.get_Password());
@@ -223,41 +174,21 @@ void setup() {
 
 // ** Repeated loop called when loop ends *************************************************
 void loop() {
+
   if (!client.connected()) {
-    turn_light_on();
     reconnect();
-    turn_light_off();
   }
   client.loop();
 
-//  unsigned long now = millis();
-//  if (now - lastMsgMillis > SAMPLE_INTERVAL_MILLIS) {
-//    // toggle_light();                  // Enable to toggle with every sample (user feedback)
-//    
-//    lastMsgMillis = now;                // Snag current time for next delay
-//    //Serial.println("Sample!");
-//
-//    doIMUSample();
-//  }
+  unsigned long now = millis();
+  if (now - lastMsgMillis > SAMPLE_INTERVAL_MILLIS) {
+    // toggle_light();                  // Enable to toggle with every sample (user feedback)
+    
+    lastMsgMillis = now;                // Snag current time for next delay
+    //Serial.println("Sample!");
 
-  doIMUSample();
-
-  // Debugging routing for tracking sampling frequency
-  clockSamplesCount++;
-  
-  if( startClockMillis + 1000 < millis() ) {
-    //Serial.print("Samp/sec: ");
-    //Serial.print(",");
-    Serial.print("\t\t\t\t\t\t\t");
-    Serial.print(clockSamplesCount);
-    Serial.println();
-    clockSamplesCount = 0;
-    startClockMillis = millis();
+    doIMUSample();
   }
-
-  // Calculate delay needed to hit sampling frequency
-  int currDelay = (endSampleMillis * 1000 + loopMicroseconds) - (millis() * 1000);
-  currDelay = max(currDelay, 0);        // Can't be negative
-  delayMicroseconds(currDelay);
-  endSampleMillis = millis();
+  
+  delay(10);
 }
