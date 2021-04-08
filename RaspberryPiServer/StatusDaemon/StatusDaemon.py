@@ -24,6 +24,9 @@ mqtt.Client._call_socket_unregister_write = lambda _self, _sock=None: None
 
 global mqtt_client
 
+global debug
+debug = False
+
 global done
 done = False
 
@@ -87,6 +90,7 @@ def on_message(client, userdata, message):
     global stats
     global lastSentEpoch
     global threadLock
+    global debug
 
     msg_json = str(message.payload.decode("utf-8"))
 
@@ -97,9 +101,9 @@ def on_message(client, userdata, message):
         return
 
     message_count += 1
-    if( message_count % 100 == 0 ):
+    if( debug and message_count % 100 == 0 ):
         print(".", end = "", flush=True)
-    if( message_count % 10000 == 0 ):
+    if( debug and message_count % 10000 == 0 ):
         print("", flush=True)
         message_count = 0
 
