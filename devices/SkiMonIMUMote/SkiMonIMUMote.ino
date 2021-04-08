@@ -15,8 +15,8 @@
 #include <Wire.h>
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>           // MQTT client
-//#include <LSM6.h>                 // LSM6 driver from Pololu
 #include <Adafruit_LSM6DS33.h>      // LSM6 driver from Adafruit
+#include <LIS3MDL.h>                // LIS3MDL - Magnetometer from Pololu
 
 #include "eepromMenu.h"
 
@@ -25,7 +25,6 @@ ESP8266_EEPROM_Configs g_configs;   // From eepromMenu.h
 WiFiClient espClient;
 PubSubClient client(espClient);     // MQTT client
 
-//LSM6 imu;
 
 #define MSG_BUFFER_SIZE  (200)
 char msg[MSG_BUFFER_SIZE];
@@ -41,10 +40,14 @@ int clockSamplesCount;
 unsigned long lastSampleMillis;
 unsigned long endSampleMillis;
 int loopMicroseconds;
-#define SAMPLE_FREQUENCY 50
+#define SAMPLE_FREQUENCY 50           // In Hz ******************************************************
 
 Adafruit_LSM6DS33 lsm6ds33;
 
+
+// Magenetomter resources
+LIS3MDL mag;
+unsigned long lastMagMillis = 0;
 
 
 
@@ -72,7 +75,7 @@ void init_hardware() {
   pinMode(BUILTIN_LED, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
   
   Serial.begin(115200);             // Init serial
-  while(!Serial) { delay(100); }
+  //while(!Serial) { d8elay(100); }
   delay(1000);                      // Give serial time to settle
 
 //  // ** Initialize the LSM6 IMU sensor **
@@ -100,6 +103,15 @@ void init_hardware() {
 
   lsm6ds33.configInt1(false, false, true); // accelerometer DRDY on INT1
   lsm6ds33.configInt2(false, true, false); // gyro DRDY on INT2
+
+  // Magnetometer
+  if (!mag.init())
+  {
+    Serial.println("Failed to detect and initialize magnetometer!");
+    while (1);
+  }
+  Serial.println("Magenetometer initialized");
+  mag.enableDefault();      // Set to +/- 4 gauss
 
   Serial.println("\nHardware initialized.");
 }
@@ -198,6 +210,23 @@ void doIMUSample() {
 }
 
 
+// ** ************************************************************************************
+void doMagSample() {
+  mag.read();
+
+  // ** Do magnetometer publish
+  snprintf(msg, MSG_BUFFER_SIZE, "{\"type\":\"%s\", \"location\": \"%s\", \"value\": {\"x\": %6d, \"y\": %6d, \"z\": %6d}}",
+    "mag",
+    g_configs.get_DeviceLocation(),
+    mag.m.x,
+    mag.m.y,
+    mag.m.z
+  );
+  client.publish(MQTT_TOPIC, msg);
+  //Serial.println(msg);
+}
+
+
 // ** One off setup at boot **************************************************************
 void setup() {
   init_hardware();
@@ -241,6 +270,11 @@ void loop() {
 //  }
 
   doIMUSample();
+
+  if( lastMagMillis + 1000 < millis() ) {
+    lastMagMillis = millis();
+    doMagSample();
+  }
 
   // Debugging routing for tracking sampling frequency
   clockSamplesCount++;
