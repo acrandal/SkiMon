@@ -18,6 +18,8 @@ import logging.handlers as handlers
 from datetime import datetime
 import threading
 import queue
+import shutil
+import os
 
 #global logger
 
@@ -104,20 +106,31 @@ if __name__ == "__main__":
     #logHandler.setLevel(logging.INFO)
     #logger.addHandler(logHandler)
 
+    # move all old log files to the main SD card for archiving
+    backups_dir = "/usr/local/skimon/logs"
+    file_path = "/var/lib/influxdb/skimon/"
+
+    logging.info("Moving old logs to main SD card for archiving")
+    os.system('mkdir -p ' + backups_dir)
+    os.system('mv -f ' + file_path + "/* " + backups_dir + "/")
+
     # create new log file for this run
     now = datetime.now()
     file_path = "/var/lib/influxdb/skimon/"
     log_file_name = now.strftime("skimon-log-%Y-%m-%d %H:%M:%S.dat")
+    logging.info("Creating new log file for this run: " + log_file_name)
     try:
         log_file = open(file_path + "/" + log_file_name, 'w')
     except Exception as e:
         logging.error("Problem opening log file: " + str(e))
 
     # Create buffered writing thread
+    logging.info("Starting up buffer thread")
     writerThread = threading.Thread(target=writerThreadMain)
     writerThread.start()
 
     # Create and setup MQTT client
+    logging.info("Starting MQTT client")
     mqtt_client = mqtt.Client("FileScribe")
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = on_message
@@ -127,8 +140,8 @@ if __name__ == "__main__":
 
     # Main loop & operations - wait for messages via MQTT
     try:
-        mqtt_client.loop_forever()
         logging.info("Connected to MQTT - starting processing")
+        mqtt_client.loop_forever()
     except KeyboardInterrupt:
         print("")
         logging.info("Received interrupt - quitting")
