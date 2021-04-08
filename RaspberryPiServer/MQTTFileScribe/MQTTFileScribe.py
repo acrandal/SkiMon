@@ -65,7 +65,7 @@ def writerThreadMain():
             message_count = 0
 
         if( msgQueue.qsize() > 100 ):
-            logging.debug("Queue buffering up: " + str(msgQueue.qsize()))
+            logging.warn("Queue buffering up: " + str(msgQueue.qsize()))
 
     logging.info("Thread ending")
 
