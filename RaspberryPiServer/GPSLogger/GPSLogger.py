@@ -88,7 +88,7 @@ if __name__ == "__main__":
 
         while True:  # All data is available via instantiated thread data stream attribute.
             # line #140-ff of /usr/local/lib/python3.5/dist-packages/gps3/agps.py
-            logging.info("({0}: {1},{2}) @ {3} m/s to {4} degrees".format(
+            logging.debug("({0}: {1},{2}) @ {3} m/s to {4} degrees".format(
                 agps_thread.data_stream.time,
                 agps_thread.data_stream.lat,
                 agps_thread.data_stream.lon,
