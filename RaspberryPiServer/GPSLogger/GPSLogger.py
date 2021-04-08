@@ -8,55 +8,59 @@
 #   @copyright 2021
 #
 
-from influxdb import InfluxDBClient
+#from influxdb import InfluxDBClient
 from gps3.agps3threaded import AGPS3mechanism
 from time import sleep
 import logging
+import json
+
+import paho.mqtt.client as mqtt
+
+global mqtt_client
 
 
 # ** Create a InfluxDB data point from gps data point **
 def create_gps_point(location, latitude, longitude, speed, course):
-    is_valid = False
     point = {
-        "measurement": "GPS",
-        "tags": {
-            "deviceLocation": location,
-        },
-        "fields": {
+        "type": "GPS",
+        "location": location,
+        "value": {
         }
     }
 
     try:
         latitude = float(latitude)
-        is_valid = True
     except ValueError:
         latitude = 0.0
-    point["fields"]["latitude"] = latitude
+    point["value"]["latitude"] = latitude
 
     try:
         longitude = float(longitude)
-        is_valid = True
     except ValueError:
         longitude = 0.0
-    point["fields"]["longitude"] = longitude
+    point["value"]["longitude"] = longitude
 
     try:
         speed = float(speed)
-        point["fields"]["speed"] = speed
+        point["value"]["speed"] = speed
     except ValueError:
         speed = 0.0
 
     try:
         course = float(course)
-        point["fields"]["course"] = course
+        point["value"]["course"] = course
     except ValueError:
         course = -1000.0
 
+    return point
    # print(point)
-    if is_valid:
-        return point
-    else:
-        return None
+
+
+# **************************************************************************
+def on_connect(client, userdata, flags, rc):
+    logging.info("Connected with result code "+str(rc))
+
+
 
 
 if __name__ == "__main__":
@@ -65,9 +69,15 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format=formatter)
     logging.info("Starting logger")
 
-    logging.info("Connecting to InfluxDB")
-    influx_client = InfluxDBClient(host='localhost', port=8086, database='skimon')
-    logging.info("Connected to Influx")
+    #logging.info("Connecting to InfluxDB")
+    #influx_client = InfluxDBClient(host='localhost', port=8086, database='skimon')
+    #logging.info("Connected to Influx")
+
+    mqtt_client = mqtt.Client("GPS Logger Daemon")
+    mqtt_client.on_connect = on_connect
+    mqtt_client.enable_logger()
+
+    mqtt_client.connect("localhost")
 
 
     agps_thread = AGPS3mechanism()  # Instantiate AGPS3 Mechanisms
@@ -94,8 +104,11 @@ if __name__ == "__main__":
             #print('---------------------')
 
             newPoint = create_gps_point("backpack", agps_thread.data_stream.lat, agps_thread.data_stream.lon, agps_thread.data_stream.speed, agps_thread.data_stream.track)
-            if(newPoint):
-                influx_client.write_points([newPoint])
+            #print(newPoint)
+            msg_json = json.dumps(newPoint)
+            mqtt_client.publish("skimon", payload=msg_json)
+            #if(newPoint):
+                #influx_client.write_points([newPoint])
             sleep(0.5) # Sleep, or do other things for as long as you like.
 
     except KeyboardInterrupt:
