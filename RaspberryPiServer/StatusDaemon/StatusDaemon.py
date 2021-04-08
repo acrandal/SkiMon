@@ -51,7 +51,9 @@ stats = {
                 "RightFront": time(),
                 "RightMiddle": time(),
                 "RightBack": time()
-              }
+              },
+    "gps" : "no",
+    "diskFull" : 0
 }
 
 global message_count
@@ -124,6 +126,10 @@ def on_message(client, userdata, message):
         stats["motes"][msg["location"]] = time()
     elif(msg["type"] == 'recording'):
         stats["recording"] = msg["value"]
+    elif(msg["type"] == 'GPS'):
+        stats["GPS"] = "no"
+        if(msg["value"]["latitude"] != 0):
+            stats["GPS"] = "yes"
     threadLock.release()
 
     # Send out an update if it's been more than the timeout (0.5 secs)
@@ -136,6 +142,7 @@ def on_message(client, userdata, message):
             sendMsg["motes"][moteName] = (int)(time() - stats["motes"][moteName])
 
         sendMsg["diskFull"] = getDiskFullPct()
+        sendMsg["GPS"] = stats["GPS"]
 
         sendMsg_json = json.dumps(sendMsg)
 
