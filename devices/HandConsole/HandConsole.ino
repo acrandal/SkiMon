@@ -1,8 +1,8 @@
 /**
+ * SkiMon Hand Console
  * 
- * 
- * 
- * 
+ * @author Aaron S. Crandall <crandall@gonzaga.edu>
+ * @copyright 2021
  * 
  * 
  */
@@ -12,6 +12,8 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>           // MQTT client
 #include <LSM6.h>
+#include <ArduinoJson.h>
+#include <Adafruit_BME280.h>
 
 #include "eepromMenu.h"
 #include "Adafruit_SSD1306.h"
@@ -39,6 +41,33 @@ char msg[MSG_BUFFER_SIZE];
 #define MQTT_TOPIC "skimon"
 unsigned long lastMsgMillis = 0 - SAMPLE_INTERVAL_MILLIS;
 
+// JSON materials
+StaticJsonDocument<200> doc;
+
+struct UIStatus {
+  bool recording = false;
+  int diskFullPct = 0;
+  bool gps = false;
+  bool leftFront = false;
+  bool leftMiddle = false;
+  bool leftBack = false;
+  bool rightFront = false;
+  bool rightMiddle = false;
+  bool rightBack = false;
+  int altitude = 0;
+  int temperature = 0;
+};
+
+UIStatus uiStatus;
+
+// BME 280 Temperature/Humidity/Pressure/Altitude
+Adafruit_BME280 bme; // use I2C interface
+Adafruit_Sensor *bme_temp = bme.getTemperatureSensor();
+Adafruit_Sensor *bme_pressure = bme.getPressureSensor();
+Adafruit_Sensor *bme_humidity = bme.getHumiditySensor();
+unsigned long lastBMEmillis = 0;
+
+
 
 bool g_light_on = false;
 
@@ -53,6 +82,8 @@ void toggle_light() {
   }
 }
 
+
+// ** Generate a display a ski on the OLED ******************************************
 void display_ski(int x, int y, boolean isOn[3]) {
   display.setTextSize(1);
   display.setTextColor(WHITE);
@@ -77,6 +108,8 @@ void display_ski(int x, int y, boolean isOn[3]) {
   }
 }
 
+
+// ****************************************************************
 void display_status(char* msg) {
   display_status(msg, 0, false);
 }
@@ -85,7 +118,6 @@ void display_status(char* msg, int delayMS) {
   display_status(msg, delayMS, false);
 }
 
-// ****************************************************************
 void display_status(char* msg, int delayMS, boolean clearFirst) {
   if(clearFirst) {
     display_clear();
@@ -97,6 +129,7 @@ void display_status(char* msg, int delayMS, boolean clearFirst) {
   display.display();
   delay(delayMS);
 }
+
 
 // ****************************************************************
 void display_logo() {
@@ -112,41 +145,10 @@ void display_logo() {
   display.display();
 }
 
-// ****************************************************
-void display_settings() {
-  display.clearDisplay();
-  display.setTextSize(2);
-  display.setTextColor(WHITE);
-  display.setCursor(0,0);
-
-  //display.println(empty_spool_range);
-  //display.print("Full:  ");
-  //display.println(full_spool_range);
-  display.display();
-}
-
 
 // ****************************************************
 void display_clear() {
   display.clearDisplay();
-  display.display();
-}
-
-
-// ****************************************************
-void update_screen(bool got_range) {
-  display.clearDisplay();
-  display.setTextSize(2);
-  display.setTextColor(WHITE);
-  display.setCursor(0,0);
-
-  display.setTextSize(1);
-  display.println("");
-  display.setTextSize(2);
-
-  display.print(" ");
-  display.println("%");
-  
   display.display();
 }
 
@@ -186,11 +188,10 @@ void reconnect() {
     if (client.connect(clientId.c_str())) {               // Attempt to connect
       Serial.println("MQTT client connected.");
 
-      // Once connected, publish an announcement...
-      // snprintf (msg, MSG_BUFFER_SIZE, "IoT Device connected -- %s", clientId.c_str());
-      // client.publish("outTopic", msg);
       snprintf (msg, MSG_BUFFER_SIZE, "{\"type\":\"%s\", \"location\":\"%s\", \"value\":\"%s\"}", "status", g_configs.get_DeviceLocation(), "connected");
       client.publish(MQTT_TOPIC, msg);
+      
+      client.subscribe("skimon/status");
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -219,6 +220,7 @@ boolean is_go_button_pressed() {
   return is_pressed;
 }
 
+
 // ** Reading Stop Button *******************************************
 boolean is_stop_button_pressed() {
   boolean is_pressed = false;
@@ -233,6 +235,7 @@ boolean is_stop_button_pressed() {
   return is_pressed;
 }
 
+
 // ** Sending a button press ************************************************************************
 void sendRecordingStatus(char* valueMsg) {
   snprintf(msg, MSG_BUFFER_SIZE, "{\"type\":\"%s\", \"location\": \"%s\", \"value\":\"%s\"}",
@@ -243,6 +246,7 @@ void sendRecordingStatus(char* valueMsg) {
   Serial.println(msg);
   client.publish(MQTT_TOPIC, msg);
 }
+
 
 // ** Initialize hardware systems *********************************
 void init_hardware() {
@@ -257,8 +261,170 @@ void init_hardware() {
   
   pinMode(RED_BUTTON_PIN, INPUT_PULLUP);
   pinMode(GREEN_BUTTON_PIN, INPUT_PULLUP);
+
+  if (!bme.begin(0x76)) {
+    Serial.println(F("Could not find a valid BME280 sensor, check wiring!"));
+    while (1) delay(10);
+  }
+    
+  bme_temp->printSensorDetails();
+  bme_pressure->printSensorDetails();
+  bme_humidity->printSensorDetails();
   
   Serial.println("\nHardware initialized.");
+}
+
+
+// *************************************************************************************************** //
+void statusCallbackHandler(char* topic, byte* payload, unsigned int length) {
+  // Serial.print("Message:");
+  // for (int i = 0; i < length; i++) {
+  //   Serial.print((char)payload[i]);
+  // }
+  // Serial.println();
+
+  char msgC[length];
+  for (int i = 0; i < length; i++) {
+    msgC[i] = (char)payload[i];
+  }
+
+  DeserializationError error = deserializeJson(doc, msgC);
+  if (error) {
+    Serial.println("Error in deserialization");
+    return;
+  }
+
+  // Parse out the JSON values and fill up our uiStatus struct
+  const char* recording = doc["recording"];
+  int diskFull = doc["diskFull"];
+  const char* gpsStatus = doc["GPS"];
+
+  int leftFrontTimeout = doc["motes"]["LeftFront"];
+  int leftMiddleTimeout = doc["motes"]["LeftMiddle"];
+  int leftBackTimeout = doc["motes"]["LeftBack"];
+  int rightFrontTimeout = doc["motes"]["RightFront"];
+  int rightMiddleTimeout = doc["motes"]["RightMiddle"];
+  int rightBackTimeout = doc["motes"]["RightBack"];
+
+  uiStatus.recording = (strcmp(recording, "start") == 0);
+  uiStatus.diskFullPct = diskFull;
+  uiStatus.gps = (strcmp(gpsStatus, "yes") == 0);
+  uiStatus.leftFront = (leftFrontTimeout == 0);
+  uiStatus.leftMiddle = (leftMiddleTimeout == 0);
+  uiStatus.leftBack = (leftBackTimeout == 0);
+  uiStatus.rightFront = (rightFrontTimeout == 0);
+  uiStatus.rightMiddle = (rightMiddleTimeout == 0);
+  uiStatus.rightBack = (rightBackTimeout == 0);
+  uiStatus.altitude = (int)bme.readAltitude(1013.25);
+
+  sensors_event_t temp_event;
+  bme_temp->getEvent(&temp_event);
+  uiStatus.temperature = (int)temp_event.temperature;
+  
+}
+
+void dumpUIStatus() {
+  Serial.println("Recording: " + String(uiStatus.recording));
+  Serial.println("Disk Full: " + String(uiStatus.diskFullPct));
+  Serial.println("GPS Lock: " + String(uiStatus.gps));
+  Serial.println("Left Front: " + String(uiStatus.leftFront));
+  Serial.println("Left Middle: " + String(uiStatus.leftMiddle));
+  Serial.println("Left Back: " + String(uiStatus.leftBack));
+  Serial.println("Right Front: " + String(uiStatus.rightFront));
+  Serial.println("Right Middle: " + String(uiStatus.rightMiddle));
+  Serial.println("Right Back: " + String(uiStatus.rightBack));
+  Serial.println("Altitude: " + String(uiStatus.altitude));
+}
+
+
+// *************************************************************************************************** //
+void refreshSkis() {
+  bool isOnLeft[3] = {uiStatus.leftFront, uiStatus.leftMiddle, uiStatus.leftBack};
+  bool isOnRight[3] = {uiStatus.rightFront, uiStatus.rightMiddle, uiStatus.rightBack};
+  display_ski(0,0,isOnLeft);
+  display_ski(6,0,isOnRight);
+}
+
+void refreshRecording(int x, int y) {
+  display.setCursor(x,y);
+  String line = "|Dat ";
+  if(uiStatus.recording) {    line += "ON";  }
+    else {    line += "OFF";  }
+  display.print(line);
+}
+
+void refreshGPS(int x, int y) {
+  display.setCursor(x,y);
+  String line = "|GPS ";
+  if(uiStatus.gps) {    line += "YES";  }
+    else {    line += "NO";  }
+  display.print(line);
+}
+
+void refreshDisk(int x, int y) {
+  display.setCursor(x,y);
+  String line = "|DSK ";
+  if(uiStatus.diskFullPct < 10) {
+    line += String(" ");
+  }
+  line += String(uiStatus.diskFullPct);
+  line += "%";
+  display.print(line);
+}
+
+void refreshAltitude(int x, int y) {
+  display.setCursor(x,y);
+  String line = "|Alt";
+  if(uiStatus.altitude < 1000) {
+    line += String(" ");
+  }
+  line += String(uiStatus.altitude);
+  display.print(line);
+}
+
+void refreshTemperature(int x, int y) {
+  display.setCursor(x,y);
+  String line = "|Tmp ";
+  line += String(uiStatus.temperature);
+  display.print(line);
+}
+
+// *************************************************************************************************** //
+void refreshScreen() {
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0,0);
+
+  int leftX = 2 * 6;
+  int rowHeight = 10;
+
+  refreshSkis();
+  refreshRecording(leftX, 0 * rowHeight);
+  refreshGPS(leftX, 1 * rowHeight);
+  refreshDisk(leftX, 2 * rowHeight);
+  refreshAltitude(leftX, 3 * rowHeight);
+  refreshTemperature(leftX, 4 * rowHeight);
+
+  display.display();
+}
+
+// *************************************************************************************************** //
+void sendBMEreading() {
+  // Serial.println("Sending BME280 reading");
+  
+  sensors_event_t temp_event, pressure_event, humidity_event;
+  bme_temp->getEvent(&temp_event);
+  bme_pressure->getEvent(&pressure_event);
+  bme_humidity->getEvent(&humidity_event);
+
+  snprintf (msg, MSG_BUFFER_SIZE, "{\"type\":\"%s\", \"location\":\"%s\", \"temperature\":%s, \"humidity\":%s, \"altitude\":%s}",
+    "environ",
+    g_configs.get_DeviceLocation(),
+    String(temp_event.temperature, 2).c_str(),
+    String(humidity_event.relative_humidity, 2).c_str(),
+    String(bme.readAltitude(1013.25), 2).c_str());
+  client.publish(MQTT_TOPIC, msg);
 }
 
 
@@ -267,7 +433,7 @@ void setup() {
   init_hardware();                                                // Setup hardware in/out
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 64x48)
-  display.cp437(true);         // Use full 256 char 'Code Page 437' font
+  display.cp437(true);                        // Use full 256 char 'Code Page 437' font
   display.display();
 
   display_logo();
@@ -285,7 +451,10 @@ void setup() {
 
   display_status("Connecting\nMQTT Srvr", 0, true);
   client.setServer(g_configs.get_MQTTServer(), 1883);             // 1883 is the default MQTT port
-  display_status("MQTT Conn", 1000);
+  display_status("MQTT Conn", 250);
+  client.setCallback(statusCallbackHandler);
+  client.subscribe("skimon/status");
+  display_status("\n-Subscribe", 1000);
 
   // ** Start main operations
   Serial.println("Setup complete, beginning normal operations -->");
@@ -300,8 +469,6 @@ void loop() {
   }
   client.loop();
 
-//  update_screen(got_range);
-  //Serial.println("hi");
   if( is_go_button_pressed() ) {
     Serial.println("Green: Pressed!");
     sendRecordingStatus("start");
@@ -311,6 +478,13 @@ void loop() {
     Serial.println("Red: Pressed!");
     sendRecordingStatus("stop");
   }
+
+  if( lastBMEmillis + 1000 < millis() ) {
+    lastBMEmillis = millis();
+    sendBMEreading();
+  }
+
+  refreshScreen();
 
   delay(100);
 }
